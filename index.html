@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e"><link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-192.png"><meta name="mobile-web-app-capable" content="yes"><title>مكتبة الأمل - الطلبات الناقصة</title>
+<style>
+:root{--bg:#f4f6f5;--c:#fff;--t:#14211f;--m:#6b7b78;--p:#0f766e;--r:#dc2626;--b:#dfe6e4;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#101716;--c:#18221f;--t:#e8f0ee;--m:#8fa19d;--b:#2a3835}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}body{user-select:none;-webkit-user-select:none}input,textarea{user-select:text;-webkit-user-select:text}html,body{margin:0;background:var(--bg);color:var(--t);font-family:system-ui,"Segoe UI",Tahoma,sans-serif}
+header{background:var(--p);color:#fff;padding:14px 16px;font-size:18px;font-weight:700}
+header small{display:block;font-weight:400;opacity:.85;font-size:12px}
+nav{display:flex;position:sticky;top:0;background:var(--c);border-bottom:1px solid var(--b)}
+nav button{flex:1;padding:12px;border:0;background:none;color:var(--m);font-size:15px;font-family:inherit}
+nav button.on{color:var(--p);border-bottom:3px solid var(--p);font-weight:700}
+main{padding:12px;max-width:640px;margin:auto}
+.card{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:10px 12px;margin:8px 0}
+.row{display:flex;gap:8px;align-items:center}
+input,select{width:100%;padding:11px;border:1px solid var(--b);border-radius:10px;background:var(--bg);color:var(--t);font-size:15px;font-family:inherit}
+.btn{border:0;border-radius:10px;padding:11px 14px;background:var(--p);color:#fff;font-size:15px;font-family:inherit;white-space:nowrap}
+.btn.big{width:100%;margin-top:10px;padding:14px;font-size:16px}
+.btn.g{background:var(--bg);color:var(--t);border:1px solid var(--b)}.btn.d{background:var(--r)}
+.it{display:flex;gap:8px;align-items:center}.it .n{flex:1;font-size:16px}.it small{color:var(--m);display:block}
+.done .n{text-decoration:line-through;color:var(--m)}.cx .n{text-decoration:line-through;color:var(--r);opacity:.7}
+.ic{border:0;background:var(--bg);border-radius:8px;padding:8px 10px;font-size:15px;color:var(--t)}
+#ban{display:none;background:#fef3c7;color:#78350f;padding:12px;text-align:center;font-weight:700}
+h3{margin:14px 4px 4px;color:var(--m);font-size:14px}
+label{display:block;margin:12px 0 4px;font-size:14px;color:var(--m)}
+.empty{text-align:center;color:var(--m);padding:24px}
+</style></head><body>
+<header id="hd">مكتبة الأمل<small>مذكرة الطلبات الناقصة</small></header>
+<div id="ban"></div>
+<nav><button data-t="today" class="on">اليوم</button><button data-t="all">الكل</button><button data-t="set">الإعدادات</button></nav>
+<main id="v"></main>
+<script>
+const $=s=>document.querySelector(s);
+const K='alamal_v1';
+const dflt={orders:[],s:{lib:'مكتبة الأمل',time:'14:00',every:30,msg:'يرجى تسجيل طلباتك لهذا اليوم',on:true,head:'الطلبات الناقصة'},lastN:0};
+let D;try{D=JSON.parse(localStorage.getItem(K))}catch(e){}
+D=Object.assign({},dflt,D||{});D.s=Object.assign({},dflt.s,D.s);
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(D))}catch(e){}};
+const day=d=>{d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const fmt=ds=>new Date(ds+'T00:00:00').toLocaleDateString('ar',{weekday:'long',day:'numeric',month:'long'});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let tab='today';
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x==b));render()});
+
+function item(o,all){
+ const cls=o.st==='done'?'done':o.st==='cx'?'cx':'';
+ return `<div class="card it ${cls}"><div class="n">${esc(o.name)}${o.qty?' ('+esc(o.qty)+')':''}<small>${all?fmt(o.date):''}${o.st==='done'?' • وصل':o.st==='cx'?' • ملغي':''}</small></div>
+ <button class="ic" onclick="act('${o.id}','done')">${o.st==='done'?'↩':'✔'}</button>
+ <button class="ic" onclick="act('${o.id}','cx')">${o.st==='cx'?'↩':'⛔'}</button>
+ <button class="ic" onclick="edit('${o.id}')">✏️</button>
+ <button class="ic" onclick="act('${o.id}','del')">🗑</button></div>`}
+
+function render(){
+ $('#hd').innerHTML=esc(D.s.lib)+'<small>مذكرة الطلبات الناقصة</small>';
+ const v=$('#v');
+ if(tab==='today'){
+  const L=D.orders.filter(o=>!o.tr);
+  v.innerHTML=`<div class="card"><div class="row"><input id="nm" placeholder="اسم الطلب" onkeydown="if(event.key==='Enter')add()"><input id="qt" placeholder="الكمية" style="width:90px"><button class="btn" onclick="add()">إضافة</button></div></div>
+  <h3>سجل اليوم — ${fmt(day())}</h3>`+(L.length?L.map(o=>item(o,o.date!==day())).join(''):'<div class="empty">لا توجد طلبات مسجلة</div>')+
+  `<button class="btn big" onclick="transfer()">ترحيل وإرسال الطلبات 📤</button><button class="btn big g" onclick="sendText(D.orders.filter(o=>!o.tr&&o.st===''))">إرسال فقط (بدون ترحيل)</button>`;
+ }else if(tab==='all'){
+  const L=D.orders.slice(),g={};L.forEach(o=>(g[o.date]=g[o.date]||[]).push(o));
+  const ks=Object.keys(g).sort().reverse();
+  v.innerHTML=(ks.length?`<button class="btn big" style="margin:0 0 6px" onclick="sendAll()">إرسال كل الطلبات 📤</button>`+ks.map(k=>`<h3 class="row" style="justify-content:space-between"><span>${fmt(k)}</span><button class="btn" style="padding:7px 12px;font-size:13px" onclick="sendDay('${k}')">إرسال 📤</button></h3>`+g[k].map(o=>item(o,false)).join('')).join(''):'<div class="empty">لا توجد طلبات بعد</div>');
+ }else{
+  const s=D.s;
+  v.innerHTML=`<label>اسم المكتبة</label><input id="s1" value="${esc(s.lib)}">
+  <label>عنوان الرسالة عند الإرسال</label><input id="s5" value="${esc(s.head)}">
+  <label>وقت التنبيه اليومي</label><input id="s2" type="time" value="${s.time}">
+  <label>تكرار التنبيه كل (دقيقة) إذا لم تُسجَّل طلبات</label><input id="s3" type="number" min="1" value="${s.every}">
+  <label>نص التنبيه</label><input id="s4" value="${esc(s.msg)}">
+  <label>التنبيه</label><select id="s6"><option value="1" ${s.on?'selected':''}>مفعّل</option><option value="0" ${!s.on?'selected':''}>متوقف</option></select>
+  <button class="btn big" onclick="saveS()">حفظ الإعدادات</button>
+  <button class="btn big g" onclick="askPerm()">السماح بالإشعارات</button>
+  <button class="btn big g" onclick="testN()">تجربة التنبيه</button>
+  <button class="btn big d" onclick="wipe()">مسح كل البيانات</button>`;
+ }
+}
+function add(){const n=$('#nm').value.trim();if(!n)return;
+ D.orders.push({id:Date.now()+''+Math.random().toString(36).slice(2,5),name:n,qty:$('#qt').value.trim(),date:day(),st:'',tr:false});
+ save();render();hideBan();setTimeout(()=>$('#nm')&&$('#nm').focus(),50)}
+function act(id,a){const i=D.orders.findIndex(o=>o.id===id);if(i<0)return;const o=D.orders[i];
+ if(a==='del'){if(!confirm('حذف هذا الطلب؟'))return;D.orders.splice(i,1)}else o.st=o.st===a?'':a;save();render()}
+function edit(id){const o=D.orders.find(o=>o.id===id);const n=prompt('تعديل الطلب',o.name);if(n&&n.trim()){o.name=n.trim();save();render()}}
+function buildText(L){const g={};L.forEach(o=>(g[o.date]=g[o.date]||[]).push(o));
+ let t=D.s.lib+' - '+D.s.head+'\n';
+ Object.keys(g).sort().forEach(k=>{t+='\n'+fmt(k)+':\n';g[k].forEach((o,i)=>t+=(i+1)+'- '+o.name+(o.qty?' ('+o.qty+')':'')+(o.st==='done'?' ✔ وصل':o.st==='cx'?' ✖ ملغي':'')+'\n')});return t}
+function msg(x){const b=$('#ban');b.style.display='block';b.textContent=x;setTimeout(()=>{b.style.display='none'},3000)}
+function modal(t,onTr){
+ const o=$('#md');if(o)o.remove();
+ const m=document.createElement('div');m.id='md';
+ m.style.cssText='position:fixed;inset:0;background:#0009;z-index:9;display:flex;align-items:flex-end;justify-content:center';
+ m.innerHTML='<div style="background:var(--c);width:100%;max-width:640px;border-radius:16px 16px 0 0;padding:14px;max-height:92%;overflow:auto"><textarea id="mt" readonly style="width:100%;height:170px;padding:10px;border:1px solid var(--b);border-radius:10px;background:var(--bg);color:var(--t);font-size:15px;font-family:inherit"></textarea><div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn" id="mS">مشاركة</button><a class="btn" id="mW" target="_blank" rel="noopener" style="text-decoration:none">واتساب</a><a class="btn" id="mM" style="text-decoration:none">رسالة SMS</a><button class="btn g" id="mC">نسخ</button></div>'+(onTr?'<button class="btn big" id="mT">ترحيل إلى الكل ✔</button>':'')+'<button class="btn big g" id="mX">إغلاق</button></div>';
+ document.body.appendChild(m);
+ const mt=m.querySelector('#mt');mt.value=t;
+ m.querySelector('#mW').href='https://wa.me/?text='+encodeURIComponent(t);
+ m.querySelector('#mM').href='sms:?body='+encodeURIComponent(t);
+ m.querySelector('#mS').onclick=()=>{try{navigator.share({text:t}).catch(()=>{})}catch(e){msg('المشاركة غير متاحة، استخدم واتساب أو نسخ')}};
+ m.querySelector('#mC').onclick=function(){mt.focus();mt.select();let ok=false;try{ok=document.execCommand('copy')}catch(e){}try{navigator.clipboard.writeText(t)}catch(e){}this.textContent=ok?'تم النسخ ✔':'حدد النص وانسخه'};
+ if(onTr)m.querySelector('#mT').onclick=()=>{onTr();m.remove()};
+ m.querySelector('#mX').onclick=()=>m.remove();
+}
+function sendText(L,onTr){if(!L.length){msg('لا توجد طلبات للإرسال');return}modal(buildText(L),onTr)}
+function sendDay(k){sendText(D.orders.filter(o=>o.date===k))}
+function sendAll(){sendText(D.orders.slice())}
+function transfer(){const L=D.orders.filter(o=>!o.tr&&o.st!=='cx');sendText(L,()=>{D.orders.forEach(o=>{if(!o.tr)o.tr=true});save();render()})}
+function saveS(){const s=D.s;s.lib=$('#s1').value||s.lib;s.head=$('#s5').value;s.time=$('#s2').value||'14:00';s.every=Math.max(1,+$('#s3').value||30);s.msg=$('#s4').value;s.on=$('#s6').value==='1';save();render();alert('تم الحفظ')}
+function wipe(){if(confirm('مسح جميع الطلبات والإعدادات؟')){localStorage.removeItem(K);location.reload()}}
+function askPerm(){try{Notification.requestPermission().then(p=>alert(p==='granted'?'تم السماح':'لم يتم السماح'))}catch(e){alert('الإشعارات غير مدعومة هنا')}}
+function beep(){try{const c=new AudioContext(),o=c.createOscillator();o.connect(c.destination);o.frequency.value=880;o.start();setTimeout(()=>{o.stop();c.close()},350)}catch(e){}}
+function notify(){const m=D.s.msg;const b=$('#ban');b.style.display='block';b.textContent='🔔 '+m;
+ try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}beep();
+ try{if(Notification.permission==='granted')new Notification(D.s.lib,{body:m,tag:'alamal'})}catch(e){}}
+function testN(){notify()}
+function hideBan(){$('#ban').style.display='none'}
+function check(){const s=D.s;if(!s.on)return;const n=new Date();
+ const [h,m]=s.time.split(':').map(Number);const at=new Date();at.setHours(h,m,0,0);
+ if(n<at)return;
+ if(D.orders.some(o=>o.date===day()))return hideBan();
+ if(Date.now()-D.lastN>=s.every*60000){D.lastN=Date.now();save();notify()}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)check()});
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+setInterval(check,20000);render();check();
+</script></body></html>
